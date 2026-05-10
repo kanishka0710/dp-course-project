@@ -97,13 +97,17 @@ class MonteCarloTreeSearch:
         Returns:
             The selected leaf or partially expanded node.
         """
-        
+        curNode = node
+        while not curNode.is_fully_expanded():
+            curNode = curNode.best_child(self.config.exploration_c)
+        return curNode
+
 
     # ------------------------------------------------------------------
     # Phase 2 — Expansion
     # ------------------------------------------------------------------
 
-    def _expand(self, node: MCTSNode) -> MCTSNode:
+    def _expand(self, node: MCTSNode, true_H_SI: np.ndarray) -> MCTSNode:
         """
         Add one new child to node by trying an untried action.
 
@@ -117,7 +121,11 @@ class MonteCarloTreeSearch:
         Returns:
             The newly created child MCTSNode.
         """
-        raise NotImplementedError
+        action = node.untried_actions.pop(0)
+        next_state = self.env.step(node.state, action, true_H_SI)
+        child = MCTSNode(state=next_state, parent=node, action_taken=action)
+        node.children.append(child)
+        return child
 
     # ------------------------------------------------------------------
     # Phase 3 — Rollout (Simulation)
@@ -145,7 +153,14 @@ class MonteCarloTreeSearch:
         Returns:
             Discounted cumulative reward over the rollout horizon.
         """
-        raise NotImplementedError
+        for _ in range(self.config.rollout_depth):
+            action = self.rollout_policy.select_action(state)
+            next_state, reward = self.env.step(state, action, true_H_SI)
+            state = next_state
+            true_H_SI = self.env.propagate_reflectors(true_H_SI)
+            reward = reward * self.config.discount_gamma ** _
+            total_reward += reward
+        return total_reward
 
     # ------------------------------------------------------------------
     # Phase 4 — Backpropagation
@@ -160,4 +175,8 @@ class MonteCarloTreeSearch:
             node:  Leaf node where the rollout started.
             value: Discounted return obtained from the rollout.
         """
-        raise NotImplementedError
+        curNode = node
+        while curNode is not None:
+            curNode.update(value)
+            curNode = curNode.parent
+        return None

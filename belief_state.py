@@ -91,8 +91,8 @@ class BeliefState:
         SigP = state.position_uncertainty          # (N, 3) per-element variances
         SigO = self.config.measurement_noise_variance  # scalar
 
-        K      = SigP / (SigP + SigO)                                        # Eq 6.15
-        muNew  = state.reflector_positions + K * (probe_measurement - state.reflector_positions)  # Eq 6.16
+        K = SigP / (SigP + SigO)                                        # Eq 6.15
+        muNew = state.reflector_positions + K * (probe_measurement - state.reflector_positions)  # Eq 6.16
         sigNew = (1 - K) * SigP                                              # Eq 6.17
 
         return BeamformingState(
