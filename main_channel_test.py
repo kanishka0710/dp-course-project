@@ -67,6 +67,10 @@ def main():
     plt.show()
 
     plt.plot(np.log2(1 + ul_power/si_powers) + np.log2(1 + dl_power))
+    plt.xlabel("time (ms)")
+    plt.ylabel("SSE (bits/s/Hz)")
+    # plt.title("Changing SSE as one object passes a full-duplex base station")
+    plt.savefig("sse.pdf")
     plt.show()
 
 
