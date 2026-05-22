@@ -126,11 +126,24 @@ class BeliefState:
             scale=np.sqrt(state.position_uncertainty),
         )  # shape (N, 3)
 
-        # TODO: pass sampled_positions to partner's array response model and
-        # return H_SI_static + H_dynamic.
-        raise NotImplementedError(
-            "Wire sampled_positions to partner's array response code to build H_dynamic"
-        )
+        from channel import single_reflection_si_ula
+
+        n_rx, n_tx = state.H_SI_estimate.shape
+        H_dynamic = np.zeros((n_rx, n_tx), dtype=complex)
+        for pos in sampled_positions:
+            # pos = [R, phi, theta]; ULA response only needs the azimuth angle theta
+            theta = pos[2]
+            H_dynamic += single_reflection_si_ula(n_tx, n_rx, theta)
+
+        n = len(sampled_positions)
+        if n > 0:
+            H_dynamic /= n
+            norm = np.linalg.norm(H_dynamic, "fro")
+            if norm > 1e-12:
+                H_dynamic = np.sqrt(n_rx * n_tx) * H_dynamic / norm
+
+        return H_dynamic
+        
 
     def expected_sinr(
         self,

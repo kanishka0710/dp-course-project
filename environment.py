@@ -14,8 +14,8 @@ from state import BeamformingState
 
 # --- Physical / numerical constants (toy full-duplex model, see main_channel_test.py) ---
 _NOISE_FLOOR = 1e-9
-_UL_DESIRED_POWER = 1.0
-_DL_DESIRED_POWER = 1.0
+_UL_DESIRED_POWER = 1000.0 # Power in linear scale
+_DL_DESIRED_POWER = 1000.0 # Power in linear scale
 _PROBE_H_FUSION = 0.35  # weight of fresh sounding matrix in H_SI_estimate update
 
 

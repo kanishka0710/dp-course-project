@@ -10,8 +10,6 @@ def main():
     # H = single_reflection_si_upa(N_t, M_t, N_r, M_r, 0, 0)
     # U, S, Vh = np.linalg.svd(H, full_matrices=False)
 
-
-
     N = 16
     N_r = N_t = N
     theta_t = 30
@@ -72,8 +70,6 @@ def main():
     # plt.title("Changing SSE as one object passes a full-duplex base station")
     plt.savefig("sse.pdf")
     plt.show()
-
-
 
     breakpoint()
 

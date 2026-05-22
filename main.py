@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from belief_state import BeliefState
+from channel import draw_static_si_channel_ula
 from config import MCTSConfig
 from environment import BeamformingEnvironment
 from monte_carlo_tree import MonteCarloTreeSearch
@@ -35,7 +36,7 @@ def make_initial_state(config: MCTSConfig) -> BeamformingState:
 
 def main() -> None:
     config = MCTSConfig()
-    belief = BeliefState(config)
+    belief = BeliefState(config) 
 
     # Known velocity V for each reflector (N x 3): [V_R, V_phi, V_theta]
     # Replace with real values from multi-modal sensing data.
@@ -53,24 +54,31 @@ def main() -> None:
 
     state = make_initial_state(config)
 
-    # Placeholder true channel — replace with partner's channel simulator.
-    true_H_SI = state.H_SI_estimate.copy()
+    # Realistic true SI channel: mix of reflectors + spherical wave.
+    # kappa controls reflector vs direct-path balance (0=pure direct, 1=pure reflectors).
+    n_tx = state.H_SI_estimate.shape[1]
+    n_rx = state.H_SI_estimate.shape[0]
+    true_H_SI = draw_static_si_channel_ula(
+        N_t=n_tx, N_r=n_rx, sep=10.0, n_reflectors=3, kappa=0.7
+    )
 
     print("Running MCTS simulation loop...")
-    n_timesteps = 2000
+    n_timesteps = 100
     total_reward = 0.0
 
     plt.figure()
-
     for t in range(n_timesteps):
         action = planner.search(state, true_H_SI)
         next_state, reward = env.step(state, action, true_H_SI)
         total_reward += reward
         print(f"t={t:3d}  action={action}  reward={reward:.4f}  cumulative={total_reward:.4f}")
         state = next_state
-        plt.scatter(t, reward)
+        # Slowly drift the true channel each timestep to simulate reflector motion.
+        true_H_SI = env.advance_true_channel(true_H_SI)
+        plt.scatter(t, reward, color='blue', marker='o')
     plt.xlabel("Timestep")
     plt.ylabel("Reward")
+    plt.grid(True)
     plt.title("Reward over Time")
     plt.show()
 

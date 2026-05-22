@@ -74,8 +74,8 @@ class MonteCarloTreeSearch:
             node = self._select(root)
             if not node.is_fully_expanded():
                 node = self._expand(node, true_H_SI)
-            value = self._rollout(node.state, true_H_SI)
-            self._backpropagate(node, value)
+            rollout_value = self._rollout(node.state, true_H_SI)
+            self._backpropagate(node, rollout_value)
 
         return root.best_action_child().action_taken  # type: ignore[return-value]
 
@@ -115,6 +115,10 @@ class MonteCarloTreeSearch:
         the environment to obtain the child state, creates an MCTSNode for
         it, and appends it to node.children.
 
+        The immediate reward is stored on the child as ``incoming_reward``
+        so that backpropagation can include it on every simulation pass,
+        not only the first expansion.
+
         Args:
             node: A node with at least one untried action.
 
@@ -124,8 +128,9 @@ class MonteCarloTreeSearch:
         if node.untried_actions is None:
             node.untried_actions = self.env.get_all_actions()
         action = node.untried_actions.pop(0)
-        next_state, _reward = self.env.step(node.state, action, true_H_SI)
+        next_state, reward = self.env.step(node.state, action, true_H_SI)
         child = MCTSNode(state=next_state, parent=node, action_taken=action)
+        child.incoming_reward = reward
         node.children.append(child)
         return child
 
@@ -169,17 +174,29 @@ class MonteCarloTreeSearch:
     # Phase 4 — Backpropagation
     # ------------------------------------------------------------------
 
-    def _backpropagate(self, node: MCTSNode, value: float) -> None:
+    def _backpropagate(self, node: MCTSNode, rollout_value: float) -> None:
         """
-        Walk from node back to the root, calling node.update(value) at
-        each ancestor to accumulate visit counts and total values.
+        Walk from node back to the root, updating visit counts and values.
+
+        Each node stores the expected return from ITS OWN state onward.
+        As we walk up, we prepend each edge's immediate reward:
+
+            value_at_parent = incoming_reward + gamma * value_at_child
+
+        This ensures that every simulation — not just the first expansion —
+        correctly attributes edge rewards to ancestor nodes, so
+        best_action_child() at the root sees the true action values.
 
         Args:
-            node:  Leaf node where the rollout started.
-            value: Discounted return obtained from the rollout.
+            node:          Leaf node where the rollout started.
+            rollout_value: Discounted return from the rollout simulation.
         """
-        curNode = node
-        while curNode is not None:
-            curNode.update(value)
-            curNode = curNode.parent
-        return None
+        value = rollout_value
+        cur = node
+        while cur is not None:
+            # Each node stores Q(parent_state, action_taken) = incoming_reward + γ·V(child_state).
+            # Build this bottom-up: prepend the edge reward before updating, so that
+            # best_action_child() and UCT both see the true action value (not raw rollout).
+            value = cur.incoming_reward + self.config.discount_gamma * value
+            cur.update(value)
+            cur = cur.parent

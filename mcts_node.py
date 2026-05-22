@@ -34,6 +34,11 @@ class MCTSNode:
         self.children: list[MCTSNode] = []
         self.untried_actions: list[Action] | None = None  # None = not yet initialised
 
+        # Immediate reward received for the transition from parent to this node.
+        # Set during expansion; used by backpropagation to build the correct
+        # discounted return from each ancestor's perspective.
+        self.incoming_reward: float = 0.0
+
         self.visit_count: int = 0
         self.total_value: float = 0.0
 
