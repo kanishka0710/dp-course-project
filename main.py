@@ -8,6 +8,7 @@ from environment import BeamformingEnvironment
 from monte_carlo_tree import MonteCarloTreeSearch
 from rollout_policy import ThresholdRolloutPolicy
 from state import BeamformingState
+import matplotlib.pyplot as plt
 
 
 def make_initial_state(config: MCTSConfig) -> BeamformingState:
@@ -56,8 +57,10 @@ def main() -> None:
     true_H_SI = state.H_SI_estimate.copy()
 
     print("Running MCTS simulation loop...")
-    n_timesteps = 20
+    n_timesteps = 2000
     total_reward = 0.0
+
+    plt.figure()
 
     for t in range(n_timesteps):
         action = planner.search(state, true_H_SI)
@@ -65,6 +68,11 @@ def main() -> None:
         total_reward += reward
         print(f"t={t:3d}  action={action}  reward={reward:.4f}  cumulative={total_reward:.4f}")
         state = next_state
+        plt.scatter(t, reward)
+    plt.xlabel("Timestep")
+    plt.ylabel("Reward")
+    plt.title("Reward over Time")
+    plt.show()
 
     print(f"\nTotal reward over {n_timesteps} timesteps: {total_reward:.4f}")
 

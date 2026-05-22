@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from abc import ABC, abstractmethod
 
@@ -87,8 +88,9 @@ class ThresholdRolloutPolicy(RolloutPolicy):
             Action(SERVE) or Action(PROBE, beam_index).
         """
         if state.channel_age >= self.config.max_channel_age:
-            return Action(ActionType.SERVE)
-        if min(state.sinr_ul, state.sinr_dl) < self.config.sinr_threshold_db:
+            return Action(ActionType.PROBE, self._next_probe_beam())
+        sinr_min_db = self._linear_to_db(min(state.sinr_ul, state.sinr_dl))
+        if sinr_min_db < self.config.sinr_threshold_db:
             return Action(ActionType.PROBE, self._next_probe_beam())
         return Action(ActionType.SERVE)
 
@@ -105,7 +107,7 @@ class ThresholdRolloutPolicy(RolloutPolicy):
     @staticmethod
     def _linear_to_db(sinr_linear: float) -> float:
         """Convert a linear SINR value to dB."""
-        raise NotImplementedError
+        return 10.0 * math.log10(max(float(sinr_linear), 1e-30))
 
 
 class AdaptiveRolloutPolicy(RolloutPolicy):

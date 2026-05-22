@@ -26,6 +26,9 @@ class MCTSConfig:
     # 1.0 means probing fully resolves uncertainty; lower values = noisier measurements
     probe_uncertainty_reduction: float = 0.1
 
+    # Observation noise variance for Kalman-style reflector updates (belief_state.update)
+    measurement_noise_variance: float = 0.05
+
     # SINR threshold below which the rollout policy prefers probing over serving
     sinr_threshold_db: float = 5.0
 

@@ -1,4 +1,6 @@
-from array_utils import *
+import numpy as np
+
+from array_utils import get_ula_response, get_upa_response
 
 
 def single_reflection_si_ula(N_t, N_r, theta):
@@ -6,10 +8,6 @@ def single_reflection_si_ula(N_t, N_r, theta):
     A_r = get_ula_response(N_r, theta).flatten()
     H = np.outer(A_r, A_t.conj())
     return H
-
-
-
-import numpy as np
 
 def draw_ula_spherical_wave_channel(rx_dim, tx_dim, distance_lambda):
     """

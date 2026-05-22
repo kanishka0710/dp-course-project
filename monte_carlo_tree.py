@@ -73,7 +73,7 @@ class MonteCarloTreeSearch:
         for _ in range(self.config.n_simulations):
             node = self._select(root)
             if not node.is_fully_expanded():
-                node = self._expand(node)
+                node = self._expand(node, true_H_SI)
             value = self._rollout(node.state, true_H_SI)
             self._backpropagate(node, value)
 
@@ -97,10 +97,10 @@ class MonteCarloTreeSearch:
         Returns:
             The selected leaf or partially expanded node.
         """
-        curNode = node
-        while not curNode.is_fully_expanded():
-            curNode = curNode.best_child(self.config.exploration_c)
-        return curNode
+        cur = node
+        while cur.is_fully_expanded() and cur.children:
+            cur = cur.best_child(self.config.exploration_c)
+        return cur
 
 
     # ------------------------------------------------------------------
@@ -121,8 +121,10 @@ class MonteCarloTreeSearch:
         Returns:
             The newly created child MCTSNode.
         """
+        if node.untried_actions is None:
+            node.untried_actions = self.env.get_all_actions()
         action = node.untried_actions.pop(0)
-        next_state = self.env.step(node.state, action, true_H_SI)
+        next_state, _reward = self.env.step(node.state, action, true_H_SI)
         child = MCTSNode(state=next_state, parent=node, action_taken=action)
         node.children.append(child)
         return child
@@ -153,13 +155,14 @@ class MonteCarloTreeSearch:
         Returns:
             Discounted cumulative reward over the rollout horizon.
         """
-        for _ in range(self.config.rollout_depth):
+        total_reward = 0.0
+        gamma = self.config.discount_gamma
+        for t in range(self.config.rollout_depth):
             action = self.rollout_policy.select_action(state)
             next_state, reward = self.env.step(state, action, true_H_SI)
             state = next_state
-            true_H_SI = self.env.propagate_reflectors(true_H_SI)
-            reward = reward * self.config.discount_gamma ** _
-            total_reward += reward
+            true_H_SI = self.env.advance_true_channel(true_H_SI)
+            total_reward += reward * (gamma**t)
         return total_reward
 
     # ------------------------------------------------------------------
