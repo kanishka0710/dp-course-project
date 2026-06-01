@@ -65,21 +65,33 @@ def main() -> None:
     print("Running MCTS simulation loop...")
     n_timesteps = 100
     total_reward = 0.0
+    rewards: list[float] = []
+    channel_norms: list[float] = []
 
-    plt.figure()
     for t in range(n_timesteps):
         action = planner.search(state, true_H_SI)
         next_state, reward = env.step(state, action, true_H_SI)
         total_reward += reward
+        rewards.append(reward)
+        channel_norms.append(float(np.linalg.norm(true_H_SI, "fro")))
         print(f"t={t:3d}  action={action}  reward={reward:.4f}  cumulative={total_reward:.4f}")
         state = next_state
         # Slowly drift the true channel each timestep to simulate reflector motion.
         true_H_SI = env.advance_true_channel(true_H_SI)
-        plt.scatter(t, reward, color='blue', marker='o')
-    plt.xlabel("Timestep")
-    plt.ylabel("Reward")
-    plt.grid(True)
-    plt.title("Reward over Time")
+
+    fig, (ax_reward, ax_channel) = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
+    ax_reward.plot(rewards, "b-o", markersize=3)
+    ax_reward.set_ylabel("Reward")
+    ax_reward.set_title("Reward over Time")
+    ax_reward.grid(True)
+
+    ax_channel.plot(channel_norms, "r-o", markersize=3)
+    ax_channel.set_xlabel("Timestep")
+    ax_channel.set_ylabel(r"$\|H_\mathrm{SI}\|_F$")
+    ax_channel.set_title("True SI Channel Magnitude")
+    ax_channel.grid(True)
+
+    fig.tight_layout()
     plt.show()
 
     print(f"\nTotal reward over {n_timesteps} timesteps: {total_reward:.4f}")
