@@ -2,35 +2,28 @@ from dataclasses import dataclass
 
 
 @dataclass
-class MCTSConfig:
-    # UCT exploration constant
-    exploration_c: float = 1.414
+class DPConfig:
+    # Array dimensions
+    n_tx: int = 36
+    n_rx: int = 36
 
-    # Number of MCTS simulations to run before committing to an action
-    n_simulations: int = 200
+    # DP state space
+    max_age: int = 20           # maximum channel_age tracked as a state
+    n_sinr_bins: int = 36       # number of discrete SINR bins
+    sinr_min_db: float = -2.0   # lower edge of SINR grid (dB)
+    sinr_max_db: float = 80.0  # upper edge of SINR grid (dB)
 
-    # Maximum rollout depth (timesteps simulated per leaf evaluation)
-    rollout_depth: int = 10
+    # DP solver
+    probe_cost: float = 0.0     # reward penalty applied when probing
+    discount: float = 0.95      # discount factor gamma
+    vi_max_iters: int = 500     # maximum value iteration sweeps
+    vi_tol: float = 1e-6        # convergence tolerance for value iteration
 
-    # Discount factor applied to future rewards during rollout
-    discount_gamma: float = 0.95
+    # Channel drift (random walk model, no known reflector velocity)
+    drift_scale: float = 0.2    # std of complex Gaussian noise added per timestep
 
-    # Number of beams in the probing codebook (align with partner's codebook size)
-    n_probe_beams: int = 8
+    # Monte Carlo precomputation
+    n_mc_samples: int = 300     # trajectories per (age, sinr_bin) cell
 
-    # Per-timestep variance added to reflector position uncertainty when not probing
-    # Corresponds to the unknown variation v in the dynamics model
-    process_noise_variance: float = 0.01
-
-    # Factor by which probing reduces position uncertainty (0 < value <= 1)
-    # 1.0 means probing fully resolves uncertainty; lower values = noisier measurements
-    probe_uncertainty_reduction: float = 0.1
-
-    # Observation noise variance for Kalman-style reflector updates (belief_state.update)
-    measurement_noise_variance: float = 0.1
-
-    # SINR threshold below which the rollout policy prefers probing over serving
-    sinr_threshold_db: float = 5.0
-
-    # Maximum channel age (timesteps) before the rollout policy always probes
-    max_channel_age: int = 5
+    # Simulation
+    n_timesteps: int = 300      # length of evaluation episode
