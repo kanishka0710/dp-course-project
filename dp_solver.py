@@ -231,4 +231,4 @@ def estimate_fresh_sinr_bin(config: DPConfig, n_samples: int = 200) -> int:
     #     beam_f, beam_w = design_beams(H, h_r, h_t)
     #     sinr_ul, _, _ = compute_sinr(beam_f, beam_w, H, h_r, h_t)
     #     sinr_bins.append(sinr_db_to_bin(sinr_to_db(sinr_ul), config))
-    return 4
+    return 5

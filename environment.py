@@ -13,7 +13,7 @@ from channel import *
 from scipy.linalg import null_space
 
 
-SI_GAIN = 1e5
+SI_GAIN = 1e6
 UL_GAIN = 1
 DL_GAIN = 1
 NOISE_POWER = 1e-1

@@ -23,7 +23,7 @@ class DPConfig:
     drift_scale: float = 0.2    # std of complex Gaussian noise added per timestep
 
     # Monte Carlo precomputation
-    n_mc_samples: int = 300     # trajectories per (age, sinr_bin) cell
+    n_mc_samples: int = 3000     # trajectories per (age, sinr_bin) cell
 
     # Simulation
     n_timesteps: int = 300      # length of evaluation episode

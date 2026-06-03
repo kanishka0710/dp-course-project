@@ -51,7 +51,7 @@ def main():
 
     ch_hist = []
     
-    for t in range(300):
+    for t in range(150):
         x = t - 150  # center the pass near the origin
         y = 10
         z = 0
@@ -70,6 +70,10 @@ def main():
         si_powers.append(np.abs(w @ H_SI_new @ f_bfc)**2)
 
         ch_hist.append(H_SI_new)
+    for t in range(150):
+        si_powers.append(np.abs(w @ H_SI_new @ f_bfc)**2)
+        ch_hist.append(H_SI_new)
+
 
     si_powers = np.array(si_powers)
     plt.plot(10*np.log10(si_powers))
