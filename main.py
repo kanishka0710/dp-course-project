@@ -264,6 +264,16 @@ def main() -> None:
     fig2.suptitle("SI power and SINR/SNR analysis", fontsize=13, fontweight="bold")
     fig2.tight_layout()
 
+
+    new_fig, new_ax = plt.subplots()
+    for line in axes[0].get_lines():
+        new_ax.plot(line.get_xdata(), line.get_ydata(), label=line.get_label(), linestyle=line.get_linestyle())
+    new_ax.set_title(axes[0].get_title())
+    new_ax.legend()
+    plt.grid()
+
+    new_fig.savefig("subplot_only.pdf")
+
     plt.show()
 
 
