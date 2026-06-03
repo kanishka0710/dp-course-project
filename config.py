@@ -10,8 +10,8 @@ class DPConfig:
     # DP state space
     max_age: int = 20           # maximum channel_age tracked as a state
     n_sinr_bins: int = 36       # number of discrete SINR bins
-    sinr_min_db: float = -2.0   # lower edge of SINR grid (dB)
-    sinr_max_db: float = 80.0  # upper edge of SINR grid (dB)
+    sinr_min_db: float = -15.0   # lower edge of SINR grid (dB)
+    sinr_max_db: float = 50.0  # upper edge of SINR grid (dB)
 
     # DP solver
     probe_cost: float = 0.0     # reward penalty applied when probing
@@ -26,4 +26,4 @@ class DPConfig:
     n_mc_samples: int = 300     # trajectories per (age, sinr_bin) cell
 
     # Simulation
-    n_timesteps: int = 300      # length of evaluation episode
+    n_timesteps: int = 500      # length of evaluation episode

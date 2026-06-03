@@ -163,7 +163,7 @@ def main() -> None:
     P, R = precompute_transitions(config, h_t, h_r, channels=replay_channels)
     print(f"  Reward range: {R.min():.2f} – {R.max():.2f} bits/s/Hz")
 
-    fresh_bin = estimate_fresh_sinr_bin(config)
+    fresh_bin = estimate_fresh_sinr_bin(config, h_t, h_r)
     print(f"  Fresh SINR bin after PROBE: {fresh_bin} "
           f"({bin_to_sinr_db(fresh_bin, config):.1f} dB)")
 
