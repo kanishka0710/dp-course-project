@@ -11,14 +11,10 @@ Steps
 """
 
 from __future__ import annotations
-
+import pickle
 import numpy as np
+import matplotlib.pyplot as plt
 
-try:
-    import matplotlib.pyplot as plt
-    _PLOT_AVAILABLE = True
-except Exception:
-    _PLOT_AVAILABLE = False
 
 from action import Action
 from channel import draw_static_si_channel_ula
@@ -82,6 +78,7 @@ def simulate(
     config: DPConfig,
     true_H_init: np.ndarray,
     label: str,
+    channels: list[np.ndarray] | None = None,
 ) -> SimResult:
     """
     Run one episode and return a dict of per-timestep metric lists.
@@ -95,9 +92,12 @@ def simulate(
 
     If policy is provided, use the DP policy (2D lookup).
     If probe_period is provided, probe every probe_period steps (fixed baseline).
+    If channels is provided, the channel evolves by replaying that sequence instead
+    of using the random-walk drift model.
     """
     true_H = true_H_init.copy()
     state = make_initial_state(config, true_H)
+    step_index = 0
     rewards: list[float] = []
     si_power_list: list[float] = []
     sinr_ul_db_list: list[float] = []
@@ -111,7 +111,9 @@ def simulate(
         else:
             action = Action.PROBE if (t % probe_period == 0) else Action.SERVE
 
-        state, reward, true_H = step(state, action, true_H, config)
+        state, reward, true_H, step_index = step(
+            state, action, true_H, config, channels=channels, step_index=step_index
+        )
         rewards.append(reward)
 
         sinr_ul, sinr_dl, si_power = compute_sinr(state.beam_f, state.beam_w, true_H)
@@ -134,9 +136,13 @@ def simulate(
 def main() -> None:
     config = DPConfig()
 
+    # --- Load replay channels (used for both MC precomputation and simulation) ---
+    with open("H_one_reflection.pkl", "rb") as fh:
+        replay_channels = pickle.load(fh)
+
     # --- Step 1: precompute transition model ---
     print("Precomputing transition matrix (Monte Carlo)...")
-    P, R = precompute_transitions(config)
+    P, R = precompute_transitions(config, channels=replay_channels)
     print(f"  Reward range: {R.min():.2f} – {R.max():.2f} bits/s/Hz")
 
     fresh_bin = estimate_fresh_sinr_bin(config)
@@ -151,15 +157,12 @@ def main() -> None:
     print_policy(policy, config)
 
     # --- Step 4: simulate ---
-    true_H_init = draw_static_si_channel_ula(
-        N_t=config.n_tx, N_r=config.n_rx,
-        sep=10.0, n_reflectors=3, kappa=0.7,
-    )
+    true_H_init = replay_channels[0]
 
-    res_dp    = simulate(policy,   None,  config, true_H_init, "DP")
-    res_fix3  = simulate(None,    3,     config, true_H_init, "Fixed-3")
-    res_fix5  = simulate(None,    5,     config, true_H_init, "Fixed-5")
-    res_never = simulate(None,    10**9, config, true_H_init, "Never probe")
+    res_dp    = simulate(policy,   None,  config, true_H_init, "DP",         channels=replay_channels)
+    res_fix3  = simulate(None,    3,     config, true_H_init, "Fixed-3",    channels=replay_channels)
+    res_fix5  = simulate(None,    5,     config, true_H_init, "Fixed-5",    channels=replay_channels)
+    res_never = simulate(None,    10**9, config, true_H_init, "Never probe", channels=replay_channels)
 
     rewards_dp    = res_dp["rewards"]
     rewards_fix3  = res_fix3["rewards"]
@@ -177,9 +180,6 @@ def main() -> None:
     print(f"Total reward  Never     : {cum_never[-1]:.2f}")
 
     # --- Step 5: plot ---
-    if not _PLOT_AVAILABLE:
-        print("\n(matplotlib not available — skipping plot)")
-        return
 
     t = np.arange(config.n_timesteps)
 

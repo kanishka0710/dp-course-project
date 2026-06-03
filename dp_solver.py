@@ -22,7 +22,7 @@ import numpy as np
 
 from channel import draw_static_si_channel_ula
 from config import DPConfig
-from environment import compute_sinr, design_beams, drift_channel
+from environment import compute_sinr, design_beams, drift_channel, drift_channel_replay
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,10 @@ def _bin_centre_sse(bin_idx: int, config: DPConfig) -> float:
 # Precompute transition model via Monte Carlo
 # ---------------------------------------------------------------------------
 
-def precompute_transitions(config: DPConfig) -> tuple[np.ndarray, np.ndarray]:
+def precompute_transitions(
+    config: DPConfig,
+    channels: list[np.ndarray] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Build the transition matrix P and immediate reward vector R.
 
@@ -103,13 +106,16 @@ def precompute_transitions(config: DPConfig) -> tuple[np.ndarray, np.ndarray]:
     counts = np.zeros((A, S, S), dtype=np.float64)
     R_acc  = np.zeros(S, dtype=np.float64)
     R_cnt  = np.zeros(S, dtype=np.int64)
+    step_index = 0
 
     for _ in range(config.n_mc_samples):
-        # Draw a fresh SI channel for this trajectory
-        H_true = draw_static_si_channel_ula(
-            N_t=config.n_tx, N_r=config.n_rx,
-            sep=10.0, n_reflectors=3, kappa=0.7,
-        )
+        if channels is not None:
+            H_true, step_index = drift_channel_replay(channels, step_index)
+        else:
+            H_true = draw_static_si_channel_ula(
+                N_t=config.n_tx, N_r=config.n_rx,
+                sep=10.0, n_reflectors=3, kappa=0.7,
+            )
         beam_f, beam_w = design_beams(H_true)
 
         for age in range(A):
@@ -118,7 +124,10 @@ def precompute_transitions(config: DPConfig) -> tuple[np.ndarray, np.ndarray]:
 
             # Drift one step — this is what happens between the state observation
             # and the actual reward collection (mirrors environment.step)
-            H_drifted = drift_channel(H_true, config.drift_scale)
+            if channels is not None:
+                H_drifted, step_index = drift_channel_replay(channels, step_index)
+            else:
+                H_drifted = drift_channel(H_true, config.drift_scale)
 
             # Reward = SSE on the drifted channel with stale beams (UL-only)
             sinr_next, _, _ = compute_sinr(beam_f, beam_w, H_drifted)

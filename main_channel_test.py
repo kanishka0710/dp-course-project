@@ -4,6 +4,9 @@ from scipy.linalg import null_space
 import math
 import matplotlib.pyplot as plt
 
+import pickle
+
+
 def main():
     print("Hello from dp-course-project!")
     # N_t = M_t = N_r = M_r = 8
@@ -45,9 +48,11 @@ def main():
 
 
     si_powers = []
+
+    ch_hist = []
     
-    for t in range(1000):
-        x = t - 500  # center the pass near the origin
+    for t in range(300):
+        x = t - 150  # center the pass near the origin
         y = 10
         z = 0
         r = math.sqrt(x**2 + y**2 + z**2)       # radial distance
@@ -58,7 +63,13 @@ def main():
 
         H_SI_new = H_SI + H_dynamic
 
+        H_SI_new = N * H_SI_new / np.linalg.norm(H_SI_new)
+
+        print(np.linalg.norm(H_SI_new))
+
         si_powers.append(np.abs(w @ H_SI_new @ f_bfc)**2)
+
+        ch_hist.append(H_SI_new)
 
     si_powers = np.array(si_powers)
     plt.plot(10*np.log10(si_powers))
@@ -70,6 +81,9 @@ def main():
     # plt.title("Changing SSE as one object passes a full-duplex base station")
     plt.savefig("sse.pdf")
     plt.show()
+
+    with open("H_one_reflection.pkl", "wb") as file:
+        pickle.dump(ch_hist, file)
 
     breakpoint()
 

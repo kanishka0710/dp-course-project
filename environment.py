@@ -8,10 +8,26 @@ from action import Action
 from config import DPConfig
 from state import State
 
+from array_utils import *
+from channel import *
+from scipy.linalg import null_space
+
 
 _NOISE_FLOOR = 1e-9
 _UL_DESIRED_POWER = 1.0
 _DL_DESIRED_POWER = 1.0
+
+
+def drift_channel_replay(
+    channels: list[np.ndarray], step_index: int
+) -> tuple[np.ndarray, int]:
+    """
+    Return the next channel from a pre-recorded sequence, wrapping around.
+
+    Returns (H, next_step_index) so the caller can track position.
+    """
+    idx = step_index % len(channels)
+    return np.asarray(channels[idx], dtype=complex), (idx + 1) % len(channels)
 
 
 def drift_channel(H: np.ndarray, scale: float) -> np.ndarray:
@@ -33,30 +49,31 @@ def design_beams(H: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     Transmit beam f: weakest right singular vector of H (minimises SI power).
     Receive beam w : null-space of H @ f (zeroes residual SI at the combiner).
     """
-    H = np.asarray(H, dtype=complex)
-    _, _, vh = np.linalg.svd(H, full_matrices=True)
-    f = np.conj(vh[-1, :])
+
+    N_r = H.shape[0]
+    N_t = H.shape[1]
+
+    theta_t = 30
+    theta_r = -20
+
+    # LOS channels for UL/DL 
+    h_t = get_ula_response(N_t, theta_t*np.pi/180).flatten()
+    h_r = get_ula_response(N_r, theta_r*np.pi/180).flatten()
+
+    f = h_t.conj()
+    w = h_r.conj()
+
     f = f / np.linalg.norm(f)
+    w = w / np.linalg.norm(w)
 
-    # find a unit vector orthogonal to H @ f
-    Hf = H @ f
-    Hf_norm = np.linalg.norm(Hf)
-    if Hf_norm < 1e-15:
-        w = np.zeros(H.shape[0], dtype=complex)
-        w[0] = 1.0
-        return f, w
-    Hf = Hf / Hf_norm
-    for j in range(H.shape[0]):
-        e = np.zeros(H.shape[0], dtype=complex)
-        e[j] = 1.0
-        v = e - Hf * np.vdot(Hf, e)
-        if np.linalg.norm(v) > 1e-9:
-            w = v / np.linalg.norm(v)
-            return f, w
+    h_t_eff = w @ H
 
-    w = np.zeros(H.shape[0], dtype=complex)
-    w[0] = 1.0
-    return f, w
+    B = null_space(h_t_eff.reshape(1,-1))
+    P = B @ np.linalg.pinv(B.conj().T @ B) @ B.conj().T
+
+    f_bfc = P @ f
+    
+    return f_bfc, w
 
 
 def compute_sinr(
@@ -88,20 +105,26 @@ def step(
     action: Action,
     true_H: np.ndarray,
     config: DPConfig,
-) -> tuple[State, float, np.ndarray]:
+    channels: list[np.ndarray] | None = None,
+    step_index: int = 0,
+) -> tuple[State, float, np.ndarray, int]:
     """
-    Apply one action and return (next_state, reward, new_true_H).
+    Apply one action and return (next_state, reward, new_true_H, next_step_index).
 
     SERVE: keep current (stale) beams, measure SINR against the drifted channel,
            increment channel_age, collect SSE reward.
     PROBE: measure the current true channel, re-design beams, reset channel_age
            to 0, collect no reward (minus probe_cost).
 
-    The true channel is always drifted by one step regardless of action,
-    simulating reflector motion between timeslots.
+    If channels is provided the channel is drawn from that sequence (replay mode);
+    otherwise a random-walk drift step is applied to true_H.
+    next_step_index is always returned (0 when not using replay).
     """
-    # The true channel drifts every timeslot
-    new_true_H = drift_channel(true_H, config.drift_scale)
+    if channels is not None:
+        new_true_H, next_step_index = drift_channel_replay(channels, step_index)
+    else:
+        new_true_H = drift_channel(true_H, config.drift_scale)
+        next_step_index = 0
 
     if action == Action.SERVE:
         sinr_ul, _, _ = compute_sinr(state.beam_f, state.beam_w, new_true_H)
@@ -127,4 +150,4 @@ def step(
             beam_w=beam_w,
         )
 
-    return next_state, reward, new_true_H
+    return next_state, reward, new_true_H, next_step_index
