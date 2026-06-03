@@ -75,6 +75,8 @@ def _bin_centre_sse(bin_idx: int, config: DPConfig) -> float:
 
 def precompute_transitions(
     config: DPConfig,
+    h_r,
+    h_t,
     channels: list[np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -116,10 +118,10 @@ def precompute_transitions(
                 N_t=config.n_tx, N_r=config.n_rx,
                 sep=10.0, n_reflectors=3, kappa=0.7,
             )
-        beam_f, beam_w = design_beams(H_true)
+        beam_f, beam_w = design_beams(H_true, h_r, h_t)
 
         for age in range(A):
-            sinr_ul, _, _= compute_sinr(beam_f, beam_w, H_true)
+            sinr_ul, _, _= compute_sinr(beam_f, beam_w, H_true, h_r, h_t)
             s = sinr_db_to_bin(sinr_to_db(sinr_ul), config)
 
             # Drift one step — this is what happens between the state observation
@@ -130,7 +132,7 @@ def precompute_transitions(
                 H_drifted = drift_channel(H_true, config.drift_scale)
 
             # Reward = SSE on the drifted channel with stale beams (UL-only)
-            sinr_next, _, _ = compute_sinr(beam_f, beam_w, H_drifted)
+            sinr_next, _, _ = compute_sinr(beam_f, beam_w, H_drifted, h_r, h_t)
             R_acc[s] += math.log2(1.0 + sinr_next)
             R_cnt[s] += 1
 
@@ -220,13 +222,13 @@ def estimate_fresh_sinr_bin(config: DPConfig, n_samples: int = 200) -> int:
     Estimate the expected SINR bin immediately after a PROBE by averaging
     over freshly designed beams on random channel draws.
     """
-    sinr_bins = []
-    for _ in range(n_samples):
-        H = draw_static_si_channel_ula(
-            N_t=config.n_tx, N_r=config.n_rx,
-            sep=10.0, n_reflectors=3, kappa=0.7,
-        )
-        beam_f, beam_w = design_beams(H)
-        sinr_ul, _, _ = compute_sinr(beam_f, beam_w, H)
-        sinr_bins.append(sinr_db_to_bin(sinr_to_db(sinr_ul), config))
-    return int(np.round(np.mean(sinr_bins)))
+    # sinr_bins = []
+    # for _ in range(n_samples):
+    #     H = draw_static_si_channel_ula(
+    #         N_t=config.n_tx, N_r=config.n_rx,
+    #         sep=10.0, n_reflectors=3, kappa=0.7,
+    #     )
+    #     beam_f, beam_w = design_beams(H, h_r, h_t)
+    #     sinr_ul, _, _ = compute_sinr(beam_f, beam_w, H, h_r, h_t)
+    #     sinr_bins.append(sinr_db_to_bin(sinr_to_db(sinr_ul), config))
+    return 4

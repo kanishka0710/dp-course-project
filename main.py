@@ -15,9 +15,10 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
+from channel import *
+from array_utils import *
 
 from action import Action
-from channel import draw_static_si_channel_ula
 from config import DPConfig
 from dp_solver import (
     bin_to_sinr_db,
@@ -35,10 +36,10 @@ from state import State
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_initial_state(config: DPConfig, true_H: np.ndarray) -> State:
+def make_initial_state(config: DPConfig, true_H: np.ndarray, h_t, h_r) -> State:
     """Build a starting state by probing the initial true channel."""
-    beam_f, beam_w = design_beams(true_H)
-    sinr_ul, _, _ = compute_sinr(beam_f, beam_w, true_H)
+    beam_f, beam_w = design_beams(true_H, h_t, h_r)
+    sinr_ul, _, _ = compute_sinr(beam_f, beam_w, true_H, h_t, h_r)
     return State(
         channel_age=0,
         sinr_ul=sinr_ul,
@@ -77,6 +78,8 @@ def simulate(
     probe_period: int | None,
     config: DPConfig,
     true_H_init: np.ndarray,
+    h_t,
+    h_r,
     label: str,
     channels: list[np.ndarray] | None = None,
 ) -> SimResult:
@@ -95,8 +98,9 @@ def simulate(
     If channels is provided, the channel evolves by replaying that sequence instead
     of using the random-walk drift model.
     """
+
     true_H = true_H_init.copy()
-    state = make_initial_state(config, true_H)
+    state = make_initial_state(config, true_H, h_t, h_r)
     step_index = 0
     rewards: list[float] = []
     si_power_list: list[float] = []
@@ -112,11 +116,11 @@ def simulate(
             action = Action.PROBE if (t % probe_period == 0) else Action.SERVE
 
         state, reward, true_H, step_index = step(
-            state, action, true_H, config, channels=channels, step_index=step_index
+            state, action, true_H, config, h_t, h_r, channels=channels, step_index=step_index
         )
         rewards.append(reward)
 
-        sinr_ul, sinr_dl, si_power = compute_sinr(state.beam_f, state.beam_w, true_H)
+        sinr_ul, sinr_dl, si_power = compute_sinr(state.beam_f, state.beam_w, true_H, h_t, h_r)
         si_power_list.append(si_power)
         sinr_ul_db_list.append(10.0 * np.log10(sinr_ul) if sinr_ul > 0 else -np.inf)
         sinr_dl_db_list.append(10.0 * np.log10(sinr_dl) if sinr_dl > 0 else -np.inf)
@@ -140,9 +144,23 @@ def main() -> None:
     with open("H_one_reflection.pkl", "rb") as fh:
         replay_channels = pickle.load(fh)
 
+    
+    theta_t = 30
+    theta_r = -20
+
+    H_init = replay_channels[0]
+
+
+    N_r = H_init.shape[0]
+    N_t = H_init.shape[1]
+
+    # LOS channels for UL/DL 
+    h_t = get_ula_response(N_t, theta_t*np.pi/180).flatten()
+    h_r = get_ula_response(N_r, theta_r*np.pi/180).flatten()
+
     # --- Step 1: precompute transition model ---
     print("Precomputing transition matrix (Monte Carlo)...")
-    P, R = precompute_transitions(config, channels=replay_channels)
+    P, R = precompute_transitions(config, h_t, h_r, channels=replay_channels)
     print(f"  Reward range: {R.min():.2f} – {R.max():.2f} bits/s/Hz")
 
     fresh_bin = estimate_fresh_sinr_bin(config)
@@ -159,10 +177,14 @@ def main() -> None:
     # --- Step 4: simulate ---
     true_H_init = replay_channels[0]
 
-    res_dp    = simulate(policy,   None,  config, true_H_init, "DP",         channels=replay_channels)
-    res_fix3  = simulate(None,    3,     config, true_H_init, "Fixed-3",    channels=replay_channels)
-    res_fix5  = simulate(None,    5,     config, true_H_init, "Fixed-5",    channels=replay_channels)
-    res_never = simulate(None,    10**9, config, true_H_init, "Never probe", channels=replay_channels)
+    print("\tdp")
+    res_dp    = simulate(policy,   None,  config, true_H_init, h_t, h_r, "DP",         channels=replay_channels)
+    print("\t3")
+    res_fix3  = simulate(None,    3,     config, true_H_init, h_t, h_r, "Fixed-3",    channels=replay_channels)
+    print("\t5")
+    res_fix5  = simulate(None,    5,     config, true_H_init, h_t, h_r, "Fixed-5",    channels=replay_channels)
+    print("\tnever probe")
+    res_never = simulate(None,    10**9, config, true_H_init, h_t, h_r, "Never probe", channels=replay_channels)
 
     rewards_dp    = res_dp["rewards"]
     rewards_fix3  = res_fix3["rewards"]

@@ -13,10 +13,10 @@ from channel import *
 from scipy.linalg import null_space
 
 
-_NOISE_FLOOR = 1e-9
-_UL_DESIRED_POWER = 1.0
-_DL_DESIRED_POWER = 1.0
-
+SI_GAIN = 1e5
+UL_GAIN = 1
+DL_GAIN = 1
+NOISE_POWER = 1e-1
 
 def drift_channel_replay(
     channels: list[np.ndarray], step_index: int
@@ -42,23 +42,13 @@ def drift_channel(H: np.ndarray, scale: float) -> np.ndarray:
     return H + noise
 
 
-def design_beams(H: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def design_beams(H, h_t, h_r) -> tuple[np.ndarray, np.ndarray]:
     """
     Build a SI-suppressing beam pair from a channel estimate H.
 
     Transmit beam f: weakest right singular vector of H (minimises SI power).
     Receive beam w : null-space of H @ f (zeroes residual SI at the combiner).
     """
-
-    N_r = H.shape[0]
-    N_t = H.shape[1]
-
-    theta_t = 30
-    theta_r = -20
-
-    # LOS channels for UL/DL 
-    h_t = get_ula_response(N_t, theta_t*np.pi/180).flatten()
-    h_r = get_ula_response(N_r, theta_r*np.pi/180).flatten()
 
     f = h_t.conj()
     w = h_r.conj()
@@ -77,18 +67,22 @@ def design_beams(H: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def compute_sinr(
-    beam_f: np.ndarray, beam_w: np.ndarray, H: np.ndarray
+    beam_f: np.ndarray, beam_w: np.ndarray, H: np.ndarray, h_t, h_r
 ) -> tuple[float, float]:
     """Return (SINR_UL, SNR_DL) for the given beam pair and true channel."""
     f = np.asarray(beam_f, dtype=complex).reshape(-1)
     w = np.asarray(beam_w, dtype=complex).reshape(-1)
-    si_power = abs(np.vdot(w, H @ f)) ** 2
-    sinr_ul = _UL_DESIRED_POWER / (si_power + _NOISE_FLOOR)
-    sinr_dl = _DL_DESIRED_POWER / _NOISE_FLOOR
-    return float(sinr_ul), float(sinr_dl), float(si_power)
+    si_power = SI_GAIN * np.abs(w @ H @ f)**2
+
+    ul_power = UL_GAIN * np.abs(h_r @ w)**2
+    dl_power = DL_GAIN * np.abs(h_t @ f)**2
+
+    sinr_ul = ul_power / (si_power + NOISE_POWER)
+    snr_dl = dl_power / NOISE_POWER
+    return float(sinr_ul), float(snr_dl), float(si_power)
 
 
-def compute_sse(beam_f: np.ndarray, beam_w: np.ndarray, H: np.ndarray) -> float:
+def compute_sse(sinr_ul, snr_dl) -> float:
     """
     Uplink spectral efficiency (bits/s/Hz): log2(1 + SINR_UL).
 
@@ -96,8 +90,9 @@ def compute_sse(beam_f: np.ndarray, beam_w: np.ndarray, H: np.ndarray) -> float:
     is constant for all states, so it cancels in the DP Bellman comparison and
     is omitted here to keep the reward numerically focused on the decision.
     """
-    sinr_ul, _, _ = compute_sinr(beam_f, beam_w, H)
-    return math.log2(1.0 + sinr_ul)
+    
+
+    return math.log2(1.0 + sinr_ul) #+ math.log2(1.0 + snr_dl)
 
 
 def step(
@@ -105,6 +100,8 @@ def step(
     action: Action,
     true_H: np.ndarray,
     config: DPConfig,
+    h_t,
+    h_r,
     channels: list[np.ndarray] | None = None,
     step_index: int = 0,
 ) -> tuple[State, float, np.ndarray, int]:
@@ -127,8 +124,9 @@ def step(
         next_step_index = 0
 
     if action == Action.SERVE:
-        sinr_ul, _, _ = compute_sinr(state.beam_f, state.beam_w, new_true_H)
-        reward = compute_sse(state.beam_f, state.beam_w, new_true_H)
+        print(f"serve {step_index}")
+        sinr_ul, snr_dl, _ = compute_sinr(state.beam_f, state.beam_w, new_true_H, h_t, h_r)
+        reward = compute_sse(sinr_ul, snr_dl)
         next_state = State(
             channel_age=min(state.channel_age + 1, config.max_age),
             sinr_ul=sinr_ul,
@@ -138,9 +136,11 @@ def step(
         )
     else:  # PROBE
         # Treat the current true channel as the new estimate (noiseless probe for simplicity)
+        print(f"probe {step_index}")
+
         H_new = new_true_H.copy()
-        beam_f, beam_w = design_beams(H_new)
-        sinr_ul, _, _ = compute_sinr(beam_f, beam_w, new_true_H)
+        beam_f, beam_w = design_beams(H_new, h_t, h_r)
+        sinr_ul, _, _ = compute_sinr(beam_f, beam_w, new_true_H, h_t, h_r)
         reward = -config.probe_cost
         next_state = State(
             channel_age=0,
